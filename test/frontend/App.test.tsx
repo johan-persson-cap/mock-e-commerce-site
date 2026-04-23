@@ -16,17 +16,34 @@ const mockProducts: Product[] = [
 ];
 
 vi.mock('../../src/frontend/src/hooks/useProducts');
+vi.mock('../../src/frontend/src/hooks/useCart');
 vi.mock('../../src/frontend/src/api');
 
 import { useProducts } from '../../src/frontend/src/hooks/useProducts';
-import { addToCart } from '../../src/frontend/src/api';
+import { useCart } from '../../src/frontend/src/hooks/useCart';
 
 const mockedUseProducts = vi.mocked(useProducts);
-const mockedAddToCart = vi.mocked(addToCart);
+const mockedUseCart = vi.mocked(useCart);
+
+const defaultCartReturn = {
+  items: [],
+  loading: false,
+  error: null,
+  addToCart: vi.fn(),
+  updateQuantity: vi.fn(),
+  removeItem: vi.fn(),
+  clearCart: vi.fn(),
+  totalPrice: 0,
+  totalItems: 0,
+};
 
 describe('App', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    mockedUseCart.mockReturnValue({ ...defaultCartReturn });
   });
 
   it('renders the header with shop name', () => {
@@ -79,13 +96,8 @@ describe('App', () => {
 
   it('shows notification after adding to cart', async () => {
     mockedUseProducts.mockReturnValue({ products: mockProducts, loading: false, error: null });
-    mockedAddToCart.mockResolvedValue({
-      productId: 1,
-      productName: 'Test Headphones',
-      unitPrice: 79.99,
-      quantity: 1,
-      totalPrice: 79.99,
-    });
+    const addToCart = vi.fn().mockResolvedValue(undefined);
+    mockedUseCart.mockReturnValue({ ...defaultCartReturn, addToCart });
 
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: /add test headphones to cart/i }));
@@ -95,11 +107,27 @@ describe('App', () => {
 
   it('shows error notification when add to cart fails', async () => {
     mockedUseProducts.mockReturnValue({ products: mockProducts, loading: false, error: null });
-    mockedAddToCart.mockRejectedValue(new Error('Server error'));
+    const addToCart = vi.fn().mockRejectedValue(new Error('Server error'));
+    mockedUseCart.mockReturnValue({ ...defaultCartReturn, addToCart });
 
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: /add test headphones to cart/i }));
 
     expect(await screen.findByRole('status')).toHaveTextContent('Failed to add item to cart.');
+  });
+
+  it('opens cart panel when cart button is clicked', async () => {
+    mockedUseProducts.mockReturnValue({ products: [], loading: false, error: null });
+    mockedUseCart.mockReturnValue({
+      ...defaultCartReturn,
+      items: [{ productId: 1, productName: 'Test', unitPrice: 10, quantity: 1, totalPrice: 10 }],
+      totalPrice: 10,
+      totalItems: 1,
+    });
+
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: /shopping cart/i }));
+
+    expect(screen.getByRole('dialog', { name: 'Shopping cart' })).toBeInTheDocument();
   });
 });
